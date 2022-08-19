@@ -1,6 +1,6 @@
 /*
   ---------------------------------------------------------------------------
-  Reflow Master Control - v2.02 - 20/12/2020.
+  Reflow Master Control - v2.05 - 07/07/2022
 
   AUTHOR/LICENSE:
   Created by Seon Rozenblum - seon@unexpectedmaker.com
@@ -8,7 +8,7 @@
 
   LINKS:
   Project home: github.com/unexpectedmaker/reflowmaster
-  Blog: unexpectedmaker.com
+  Blog: unexpectedmaker.comYes, 
 
   PURPOSE:
   This controller is the software that runs on the Reflow Master toaster oven controller made by Unexpected Maker
@@ -41,7 +41,10 @@
                     - Fixed some incorrect comments
                     - Made TC error more visible
   21/12/2020 v2.02  - Fixed UI glitch in main menu with TC error display
-  ---------------------------------------------------------------------------
+  12/05/2021 v2.03  - Increased BAKE max Temperature to 150deg C
+  31/10/2021 v2.04  - Some code cleanup and optimisations and merge of fixes from @dmadison
+  07/07/2022 v2.05  - Fixed a compiler error with spline lib using latest Adafruit SAMD board definitions (>1.6.6)
+  -----------------------------------------------------------------------------------------------------------------
 */
 
 /*
@@ -143,12 +146,12 @@ enum states {
   ABORT = 99
 } state;
 
-const String ver = "2.02";
+const String ver = "2.05";
 bool newSettings = false;
 
 // TC variables
-long nextTempRead;
-long nextTempAvgRead;
+unsigned long nextTempRead;
+unsigned long nextTempAvgRead;
 int avgReadCount = 0;
 
 unsigned long keepFanOnTime = 0;
@@ -163,17 +166,18 @@ int lastTempDirection = 0;
 long minBakeTime = 600; // 10 mins in seconds
 long maxBakeTime = 10800; // 3 hours in seconds
 float minBakeTemp = 45; // 45 Degrees C
-float maxBakeTemp = 100; // 100 Degrees C
+float maxBakeTemp = 150; // 100 Degrees C
 
 int maxFanTime = 120; // 2 minutes
 
 // Current index in the settings screen
-byte settings_pointer = 0;
+int settings_pointer = 0;
 
 // Initialise an array to hold 5 profiles
 // Increase this array if you plan to add more
 ReflowGraph solderPaste[5];
 // Index into the current profile
+
 int currentGraphIndex = 0;
 
 // Calibration data - currently diabled in this version
@@ -848,7 +852,7 @@ void ReadCurrentTempAvg()
   else
   {
     tcError = 0;
-    float internal = tc.getInternal();
+    tc.getInternal(); // required by the TC to get the correct compensated value back
     currentTempAvg += tc.getTemperature() + set.tempOffset;
     avgReadCount++;
   }
@@ -867,7 +871,7 @@ void ReadCurrentTemp()
   else
   {
     tcError = 0;
-    float internal = tc.getInternal();
+    tc.getInternal(); // required by the TC to get the correct compensated value back
     currentTemp = tc.getTemperature() + set.tempOffset;
     currentTemp =  constrain(currentTemp, -10, 350);
 
@@ -1271,7 +1275,7 @@ void ShowPaste()
 
   int y = 50;
 
-  for ( int i = 0; i < ELEMENTS(solderPaste); i++ )
+  for ( size_t i = 0; i < ELEMENTS(solderPaste); i++ )
   {
     if ( i == set.paste )
       tft.setTextColor( YELLOW, BLACK );
@@ -1428,7 +1432,7 @@ void UpdateBakeMenu()
   tft.println(String(set.bakeTime / 60) + "min ");
 }
 
-void ShowBakeMenu( bool clearAll )
+void ShowBakeMenu()
 {
   state = BAKE_MENU;
 
@@ -1476,7 +1480,6 @@ void UpdateBake()
   tft.setTextSize(3);
   tft.setCursor( 20, 20 );
 
-  int tm = set.bakeTime - currentBakeTime;
   switch (currentBakeTimeCounter)
   {
     case 0:
@@ -1817,10 +1820,7 @@ void ShowOvenCheck()
   state = OVENCHECK;
   SetRelayFrequency( 0 );
   StartFan( true );
-
-  int posY = 50;
-  int incY = 20;
-
+  
   debug_println("Oven Check");
 
   tft.fillScreen(BLACK);
@@ -1991,7 +1991,7 @@ void UpdateSettingsTempOffset( int posY )
    Button press code here
 */
 
-long nextButtonPress = 0;
+unsigned long nextButtonPress = 0;
 
 void button0Press()
 {
@@ -2117,7 +2117,7 @@ void button1Press()
     {
       // Only allow reflow start if there is no TC error
       if ( tcError == 0 )
-        ShowBakeMenu( true );
+        ShowBakeMenu();
       else
         Buzzer( 100, 250 );
     }
@@ -2172,7 +2172,7 @@ void button2Press()
     }
     else if ( state == SETTINGS_PASTE )
     {
-      settings_pointer = constrain( settings_pointer - 1, 0, ELEMENTS(solderPaste) - 1 );
+      settings_pointer = constrain( settings_pointer - 1, 0, (int) ELEMENTS(solderPaste) - 1 );
       UpdateSettingsPointer();
     }
   }
@@ -2210,7 +2210,7 @@ void button3Press()
     }
     else if ( state == SETTINGS_PASTE )
     {
-      settings_pointer = constrain( settings_pointer + 1, 0, ELEMENTS(solderPaste) - 1 );
+      settings_pointer = constrain( settings_pointer + 1, 0, (int) ELEMENTS(solderPaste) - 1 );
       UpdateSettingsPointer();
     }
   }
@@ -2312,10 +2312,8 @@ void button0LongPress()
 
 void SetupGraph(Adafruit_ILI9341 &d, double x, double y, double gx, double gy, double w, double h, double xlo, double xhi, double xinc, double ylo, double yhi, double yinc, String title, String xlabel, String ylabel, unsigned int gcolor, unsigned int acolor, unsigned int tcolor, unsigned int bcolor )
 {
-  double ydiv, xdiv;
   double i;
   int temp;
-  int rot, newrot;
 
   ox = (x - xlo) * ( w) / (xhi - xlo) + gx;
   oy = (y - ylo) * (gy - h - gy) / (yhi - ylo) + gy;
@@ -2414,15 +2412,6 @@ void GraphDefault(Adafruit_ILI9341 &d, double x, double y, double gx, double gy,
   oy = y;
 }
 
-char* string2char(String command)
-{
-  if (command.length() != 0)
-  {
-    char *p = const_cast<char*>(command.c_str());
-    return p;
-  }
-}
-
 void println_Center( Adafruit_ILI9341 &d, String heading, int centerX, int centerY )
 {
   int x = 0;
@@ -2430,7 +2419,7 @@ void println_Center( Adafruit_ILI9341 &d, String heading, int centerX, int cente
   int16_t  x1, y1;
   uint16_t ww, hh;
 
-  d.getTextBounds( string2char(heading), x, y, &x1, &y1, &ww, &hh );
+  d.getTextBounds( heading.c_str(), x, y, &x1, &y1, &ww, &hh );
   d.setCursor( centerX - ww / 2 + 2, centerY - hh / 2);
   d.println( heading );
 }
@@ -2442,7 +2431,7 @@ void println_Right( Adafruit_ILI9341 &d, String heading, int centerX, int center
   int16_t  x1, y1;
   uint16_t ww, hh;
 
-  d.getTextBounds( string2char(heading), x, y, &x1, &y1, &ww, &hh );
+  d.getTextBounds( heading.c_str(), x, y, &x1, &y1, &ww, &hh );
   d.setCursor( centerX + ( 18 - ww ), centerY - hh / 2);
   d.println( heading );
 }
