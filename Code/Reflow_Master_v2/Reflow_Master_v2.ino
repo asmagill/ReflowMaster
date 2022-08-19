@@ -38,7 +38,7 @@
                     - Oven was not turned off correctly after the bake ended
   20/12/2020 v2.02  - Prevent going into the Bake menu when there is a thermocouple error
                     - Set FAN to Off by default
-                    - Fixed some incorrect comments 
+                    - Fixed some incorrect comments
                     - Made TC error more visible
   21/12/2020 v2.02  - Fixed UI glitch in main menu with TC error display
   ---------------------------------------------------------------------------
@@ -165,6 +165,8 @@ long maxBakeTime = 10800; // 3 hours in seconds
 float minBakeTemp = 45; // 45 Degrees C
 float maxBakeTemp = 100; // 100 Degrees C
 
+int maxFanTime = 120; // 2 minutes
+
 // Current index in the settings screen
 byte settings_pointer = 0;
 
@@ -246,30 +248,63 @@ void LoadPaste()
         Profile graph Y values - temperature
         Length of the graph  ( int, how long if the graph array )
   */
-  float baseGraphX[7] = { 1, 90, 180, 210, 240, 270, 300 }; // time
-  float baseGraphY[7] = { 27, 90, 130, 138, 165, 138, 27 }; // value
 
-  solderPaste[0] = ReflowGraph( "CHIPQUIK", "No-Clean Sn42/Bi57.6/Ag0.4", 138, baseGraphX, baseGraphY, ELEMENTS(baseGraphX) );
+// start at 30 (sheet says 25) to see if inertia will carry us once burner(s) on
+// no way in hell can we get to 100 in 30 seconds... need to consider slower ramp up -- check site
+//   float baseGraphX[7]  = {   1,  30, 120, 150, 210, 240, 270 }; // time
+//   float baseGraphY[7]  = {  30, 100, 150, 183, 235, 183,  25 }; // value
+  float baseGraphX[7]  = {   1,  60, 150, 180, 240, 270, 300 }; // time
+  float baseGraphY[7]  = {  30, 100, 150, 183, 235, 183,  25 }; // value
+  solderPaste[0]  = ReflowGraph( "CHIPQUIK SMD291AX", "No Clean Sn63/Pb37", 183, baseGraphX, baseGraphY, ELEMENTS(baseGraphX) );
 
-  float baseGraphX1[7] = { 1, 90, 180, 225, 240, 270, 300 }; // time
-  float baseGraphY1[7] = { 25, 150, 175, 190, 210, 125, 50 }; // value
+// start at 30 (sheet says 25) to see if inertia will carry us once burner(s) on
+// need to test with both burners on because 150 will be hard to hit in 90
+  float baseGraphX1[7] = {   1,  90, 180, 210, 240, 270, 300 }; // time
+  float baseGraphY1[7] = {  30, 150, 175, 217, 249, 217,  25 }; // value
+  solderPaste[1] = ReflowGraph( "CHIPQUIK SMD291SNL", "No Clean Sn96.5/Ag3.0/Cu0.5", 217, baseGraphX1, baseGraphY1, ELEMENTS(baseGraphX1) );
 
-  solderPaste[1] = ReflowGraph( "CHEMTOOLS L", "No Clean 63CR218 Sn63/Pb37", 183, baseGraphX1, baseGraphY1, ELEMENTS(baseGraphX1) );
+// start at 30 (sheet says 25) to see if inertia will carry us once burner(s) on
+  float baseGraphX2[7] = {   1,  90, 180, 210, 240, 270, 300 }; // time
+  float baseGraphY2[7] = {  30,  90, 130, 138, 165, 138,  25 }; // value
+  solderPaste[2] = ReflowGraph( "CHIPQUIK SMDLTLFP", "No Clean Sn42/Bi57.6/Ag0.4", 138, baseGraphX2, baseGraphY2, ELEMENTS(baseGraphX2) );
 
-  float baseGraphX2[6] = { 1, 75, 130, 180, 210, 250 }; // time
-  float baseGraphY2[6] = { 25, 150, 175, 210, 150, 50 }; // value
+// trying these as generics when can't find better data...
 
-  solderPaste[2] = ReflowGraph( "CHEMTOOLS S", "No Clean 63CR218 Sn63/Pb37", 183, baseGraphX2, baseGraphY2, ELEMENTS(baseGraphX2) );
+// start at 30 (original code says 25) to see if inertia will carry us once burner(s) on
+// need to test with both burners on because 150 will be hard to hit in 90
+  float baseGraphX3[7] = {   1,  90, 180, 225, 240, 270, 300 }; // time
+  float baseGraphY3[7] = {  30, 150, 175, 190, 210, 125,  50 }; // value
+  solderPaste[3] = ReflowGraph( "CHEMTOOLS L", "No Clean 63CR218 Sn63/Pb37", 183, baseGraphX3, baseGraphY3, ELEMENTS(baseGraphX3) );
 
-  float baseGraphX3[7] = { 1, 60, 120, 160, 210, 260, 310 }; // time
-  float baseGraphY3[7] = { 25, 105, 150, 150, 220, 150, 20 }; // value
-
-  solderPaste[3] = ReflowGraph( "DOC SOLDER", "No Clean Sn63/Pb36/Ag2", 187, baseGraphX3, baseGraphY3, ELEMENTS(baseGraphX3) );
-
-  float baseGraphX4[6] = { 1, 90, 165, 225, 330, 360 }; // time
-  float baseGraphY4[6] = { 25, 150, 175, 235, 100, 25 }; // value
-
+// start at 30 (original code says 25) to see if inertia will carry us once burner(s) on
+// same
+  float baseGraphX4[6] = {   1,  90, 165, 225, 330, 360 }; // time
+  float baseGraphY4[6] = {  30, 150, 175, 235, 100,  25 }; // value
   solderPaste[4] = ReflowGraph( "CHEMTOOLS SAC305 HD", "Sn96.5/Ag3.0/Cu0.5", 225, baseGraphX4, baseGraphY4, ELEMENTS(baseGraphX4) );
+
+// add Adafruit MakerPaste
+// other tube I have?
+// don't forget to change line 173 if adding more
+
+//   float baseGraphX[7] = { 1, 90, 180, 210, 240, 270, 300 }; // time
+//   float baseGraphY[7] = { 27, 90, 130, 138, 165, 138, 27 }; // value
+//   solderPaste[0] = ReflowGraph( "CHIPQUIK", "No-Clean Sn42/Bi57.6/Ag0.4", 138, baseGraphX, baseGraphY, ELEMENTS(baseGraphX) );
+//
+//   float baseGraphX1[7] = { 1, 90, 180, 225, 240, 270, 300 }; // time
+//   float baseGraphY1[7] = { 25, 150, 175, 190, 210, 125, 50 }; // value
+//   solderPaste[1] = ReflowGraph( "CHEMTOOLS L", "No Clean 63CR218 Sn63/Pb37", 183, baseGraphX1, baseGraphY1, ELEMENTS(baseGraphX1) );
+//
+//   float baseGraphX2[6] = { 1, 75, 130, 180, 210, 250 }; // time
+//   float baseGraphY2[6] = { 25, 150, 175, 210, 150, 50 }; // value
+//   solderPaste[2] = ReflowGraph( "CHEMTOOLS S", "No Clean 63CR218 Sn63/Pb37", 183, baseGraphX2, baseGraphY2, ELEMENTS(baseGraphX2) );
+//
+//   float baseGraphX3[7] = { 1, 60, 120, 160, 210, 260, 310 }; // time
+//   float baseGraphY3[7] = { 25, 105, 150, 150, 220, 150, 20 }; // value
+//   solderPaste[3] = ReflowGraph( "DOC SOLDER", "No Clean Sn63/Pb36/Ag2", 187, baseGraphX3, baseGraphY3, ELEMENTS(baseGraphX3) );
+//
+//   float baseGraphX4[6] = { 1, 90, 165, 225, 330, 360 }; // time
+//   float baseGraphY4[6] = { 25, 150, 175, 235, 100, 25 }; // value
+//   solderPaste[4] = ReflowGraph( "CHEMTOOLS SAC305 HD", "Sn96.5/Ag3.0/Cu0.5", 225, baseGraphX4, baseGraphY4, ELEMENTS(baseGraphX4) );
 
   //TODO: Think of a better way to initalise these baseGraph arrays to not need unique array creation
 }
@@ -377,6 +412,9 @@ void setup()
   button2.attachDuringLongPress(button2LongPress);
   button3.attachLongPressStart(button3LongPressStart);
   button3.attachDuringLongPress(button3LongPress);
+
+  button0.attachLongPressStart(button0LongPressStart);
+  button0.attachDuringLongPress(button0LongPress);
 
   debug_println("TFT Begin...");
 
@@ -509,7 +547,7 @@ void loop()
         }
         tcWasError = true;
         tft.setTextColor( WHITE, RED );
-        tft.setTextSize(3);        
+        tft.setTextSize(3);
         tft.setCursor( 10, ( tft.height() / 2 ) - 15 );
         tft.println( "TC ERR #" + String( tcError ) );
       }
@@ -1275,7 +1313,7 @@ void ShowMenuOptions( bool clearAll )
   {
     // button 0
     tft.fillRect( tft.width() - 5,  buttonPosY[0], buttonWidth, buttonHeight, GREEN );
-    println_Right( tft, "REFLOW", tft.width() - 27, buttonPosY[0] + 9 );
+    println_Right( tft, "REFLOW/FAN", tft.width() - 27, buttonPosY[0] + 9 );
 
     // button 1
     tft.fillRect( tft.width() - 5,  buttonPosY[1], buttonWidth, buttonHeight, RED );
@@ -1506,7 +1544,7 @@ void StartBake()
 void BakeDone()
 {
   state = BAKE_DONE;
-  
+
   SetRelayFrequency(0); // Turn the SSR off immediately
 
   Buzzer( 2000, 500 );
@@ -2000,7 +2038,7 @@ void button0Press()
       else if ( settings_pointer == 2 ) // fan countdown after reflow
       {
         set.fanTimeAfterReflow += 5;
-        if ( set.fanTimeAfterReflow > 60 )
+        if ( set.fanTimeAfterReflow > maxFanTime )
           set.fanTimeAfterReflow = 0;
 
         UpdateSettingsFanTime( 83 );
@@ -2232,6 +2270,36 @@ void button3LongPress()
         set.bakeTime = maxBakeTime;
 
       UpdateBakeMenu();
+    }
+  }
+}
+
+void button0LongPressStart()
+{
+  if ( state == MENU )
+  {
+    if ( nextButtonPress < millis() )
+    {
+      nextButtonPress = millis() + 500;
+      Buzzer( 2000, 10 );
+      delay(50);
+      Buzzer( 2000, 10 );
+    }
+  }
+}
+
+void button0LongPress()
+{
+  if ( state == MENU )
+  {
+    if ( nextButtonPress < millis() )
+    {
+      if (keepFanOnTime > 0) {
+        keepFanOnTime = 0 ;
+      } else {
+        keepFanOnTime = millis() + 10 * 60 * 1000 ; // 10 minutes
+      }
+      nextButtonPress = millis() +  1 * 60 * 1000 ; // you really shouldn't hold this down that long
     }
   }
 }
