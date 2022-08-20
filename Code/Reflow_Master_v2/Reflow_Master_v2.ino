@@ -8,7 +8,7 @@
 
   LINKS:
   Project home: github.com/unexpectedmaker/reflowmaster
-  Blog: unexpectedmaker.comYes, 
+  Blog: unexpectedmaker.comYes,
 
   PURPOSE:
   This controller is the software that runs on the Reflow Master toaster oven controller made by Unexpected Maker
@@ -168,7 +168,8 @@ long maxBakeTime = 10800; // 3 hours in seconds
 float minBakeTemp = 45; // 45 Degrees C
 float maxBakeTemp = 150; // 100 Degrees C
 
-int maxFanTime = 120; // 2 minutes
+const long maxFanTime    = 120; // 2 minutes
+const long manualFanTime =  15 * 60 * 1000 ; // 15 minutes
 
 // Current index in the settings screen
 int settings_pointer = 0;
@@ -239,6 +240,8 @@ Settings set;
 // Initialise flash storage
 FlashStorage(flash_store, Settings);
 
+bool button0LongHandled = false ;
+
 // This is where we initialise each of the profiles that will get loaded into the Reflkow Master
 void LoadPaste()
 {
@@ -257,8 +260,10 @@ void LoadPaste()
 // no way in hell can we get to 100 in 30 seconds... need to consider slower ramp up -- check site
 //   float baseGraphX[7]  = {   1,  30, 120, 150, 210, 240, 270 }; // time
 //   float baseGraphY[7]  = {  30, 100, 150, 183, 235, 183,  25 }; // value
-  float baseGraphX[7]  = {   1,  60, 150, 180, 240, 270, 300 }; // time
-  float baseGraphY[7]  = {  30, 100, 150, 183, 235, 183,  25 }; // value
+
+// Try increasing soak by 30 seconds and reflow by 30 seconds to see if we get better results
+  float baseGraphX[7]  = {   1,  60, 150, 180, 270, 300, 330 }; // time
+  float baseGraphY[7]  = {  30, 100, 150, 183, 235, 183,  30 }; // value
   solderPaste[0]  = ReflowGraph( "CHIPQUIK SMD291AX", "No Clean Sn63/Pb37", 183, baseGraphX, baseGraphY, ELEMENTS(baseGraphX) );
 
 // start at 30 (sheet says 25) to see if inertia will carry us once burner(s) on
@@ -419,6 +424,7 @@ void setup()
 
   button0.attachLongPressStart(button0LongPressStart);
   button0.attachDuringLongPress(button0LongPress);
+  button0.attachLongPressStop(button0LongPressRelease);
 
   debug_println("TFT Begin...");
 
@@ -566,6 +572,22 @@ void loop()
         }
         tcWasGood = true;
         DisplayTemp();
+      }
+
+      if (isFanOn) {
+          unsigned long timeLeft = (keepFanOnTime - millis()) / 1000 ;
+          unsigned int mins = timeLeft / 60 ;
+          unsigned int secs = timeLeft % 60 ;
+
+          tft.fillRect(20, tft.height() - 58, 110, 20, BLACK);
+          tft.setTextColor( CYAN, BLACK ) ;
+          tft.setTextSize(2) ;
+          println_Right(
+              tft,
+              ((mins < 10) ? " " : "") + String(mins) + ":" + ((secs < 10) ? "0" : "") + String(secs),
+              110,
+              tft.height() - 48
+          ) ;
       }
     }
 
@@ -833,10 +855,12 @@ void MatchCalibrationTemp()
 void KeepFanOnCheck()
 {
   // do we keep the fan on after reflow finishes to help cooldown?
-  if ( set.useFan && millis() < keepFanOnTime )
+  if ( set.useFan && millis() < keepFanOnTime ) {
     StartFan( true );
-  else
+  } else {
+    keepFanOnTime = 0 ;
     StartFan( false );
+  }
 }
 
 void ReadCurrentTempAvg()
@@ -1073,8 +1097,10 @@ void StartFan ( bool start )
       debug_println( start );
 
       digitalWrite ( FAN, ( start ? HIGH : LOW ) );
+
+      isFanOn = start;
+      if (state == MENU) ShowMenu() ;
     }
-    isFanOn = start;
   }
   else
   {
@@ -1147,7 +1173,7 @@ void BootScreen()
   tft.setTextColor( WHITE, BLACK );
   println_Center( tft, "unexpectedmaker.com", tft.width() / 2, ( tft.height() / 2 ) - 10 );
   tft.setTextSize(1);
-  println_Center( tft, "Code v" + ver, tft.width() / 2, tft.height() - 20 );
+  println_Center( tft, "Code v" + ver + "+asm", tft.width() / 2, tft.height() - 20 );
 
   state = MENU;
 }
@@ -1184,10 +1210,16 @@ void ShowMenu()
     tft.println("Stomped!!");
   }
 
+  if ( isFanOn ) {
+    tft.setTextColor( CYAN, BLACK );
+    tft.setCursor( 20, tft.height() - 80 );
+    tft.println("Fan Countdown");
+  }
+
   tft.setTextSize(1);
   tft.setTextColor( WHITE, BLACK );
   tft.setCursor( 20, tft.height() - 20 );
-  tft.println("Reflow Master - Code v" + String(ver));
+  tft.println("Reflow Master - Code v" + String(ver) + "+asm");
 
   ShowMenuOptions( true );
 }
@@ -1317,7 +1349,8 @@ void ShowMenuOptions( bool clearAll )
   {
     // button 0
     tft.fillRect( tft.width() - 5,  buttonPosY[0], buttonWidth, buttonHeight, GREEN );
-    println_Right( tft, "REFLOW/FAN", tft.width() - 27, buttonPosY[0] + 9 );
+    println_Right( tft, "REFLOW", tft.width() - 27, buttonPosY[0] + 9 );
+    println_Right( tft, "/FAN",   tft.width() - 27, buttonPosY[0] + 27 );
 
     // button 1
     tft.fillRect( tft.width() - 5,  buttonPosY[1], buttonWidth, buttonHeight, RED );
@@ -1749,17 +1782,21 @@ void SetDefaults()
 {
   // Default settings values
   set.valid = true;
-  set.fanTimeAfterReflow = 60;
+//   set.fanTimeAfterReflow = 60;
+  set.fanTimeAfterReflow = maxFanTime;
   set.power = 1;
   set.paste = 0;
-  set.useFan = false;
+//   set.useFan = false;
+  set.useFan = true;
   set.lookAhead = 7;
   set.lookAheadWarm = 7;
-  set.startFullBlast = false;
+//   set.startFullBlast = false;
+  set.startFullBlast = true;
   set.tempOffset = 0;
   set.beep = true;
   set.bakeTime = 1200;
-  set.bakeTemp = 45;
+//   set.bakeTemp = 45;
+  set.bakeTemp = 60;
   set.bakeTempGap = 3;
 }
 
@@ -1820,7 +1857,7 @@ void ShowOvenCheck()
   state = OVENCHECK;
   SetRelayFrequency( 0 );
   StartFan( true );
-  
+
   debug_println("Oven Check");
 
   tft.fillScreen(BLACK);
@@ -2280,27 +2317,37 @@ void button0LongPressStart()
   {
     if ( nextButtonPress < millis() )
     {
-      nextButtonPress = millis() + 500;
+      nextButtonPress = millis() + 20;
       Buzzer( 2000, 10 );
       delay(50);
       Buzzer( 2000, 10 );
+      button0LongHandled = false ;
     }
   }
 }
 
 void button0LongPress()
 {
-  if ( state == MENU )
+  if ( state == MENU && !button0LongHandled )
   {
     if ( nextButtonPress < millis() )
     {
+      button0LongHandled = true ;
       if (keepFanOnTime > 0) {
         keepFanOnTime = 0 ;
       } else {
-        keepFanOnTime = millis() + 10 * 60 * 1000 ; // 10 minutes
+        keepFanOnTime = millis() + manualFanTime ;
       }
-      nextButtonPress = millis() +  1 * 60 * 1000 ; // you really shouldn't hold this down that long
+      nextButtonPress = millis() +  20 ;
     }
+  }
+}
+
+void button0LongPressRelease()
+{
+  if ( state == MENU && button0LongHandled )
+  {
+      button0LongHandled = false;
   }
 }
 
